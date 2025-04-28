@@ -1,28 +1,129 @@
+import java.nio.file.Files
+import java.nio.file.Paths
+
+
 plugins {
-    id 'java'
-    id 'org.springframework.boot' version '3.4.5'
-    id 'io.spring.dependency-management' version '1.1.7'
+    id 'java-library'
+    id 'maven-publish'
+    id 'idea'
+    id 'jacoco'
+
 }
 
-group = 'com.example'
-version = '0.0.1-SNAPSHOT'
+group 'com.solvatech.onboarding'
+version "${currentVersion}"
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+idea {
+    project {
+        jdkName = '1.8'
+        languageLevel = '1.8'
+    }
+    module {
+        name = "solvatech-onboarding"
     }
 }
 
-repositories {
-    mavenCentral()
+
+static def path(Project project, String folderName) {
+    Files.isDirectory(Paths.get(project.projectDir.absolutePath, "src", "main", folderName))
 }
 
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+def javaProjects() {
+    return subprojects.findAll {path(it, "java")}
 }
 
-tasks.named('test') {
-    useJUnitPlatform()
+def kotlinProjects() {
+    return subprojects.findAll {path(it, "kotlin")}
+}
+
+def groovyProjects() {
+    return subprojects.findAll {path(it, "groovy")}
+}
+
+configure(javaProjects()) {
+    apply plugin: 'java-library'
+    apply plugin: 'ca.cutterslade.analyze'
+}
+
+configure(groovyProjects()) {
+    apply plugin: 'groovy'
+    apply plugin: 'java-library'
+    apply plugin: 'ca.cutterslade.analyze'
+    sourceSets.main.java.srcDirs = []
+    sourceSets.main.groovy.srcDirs = ["src/main/java", "src/main/groovy"]
+}
+
+configure(kotlinProjects()) {
+    apply plugin: 'kotlin'
+    apply plugin: 'java-library'
+    apply plugin: 'ca.cutterslade.analyze'
+    apply from: "${rootDir}/_gradle/detekt.gradle"
+
+    compileKotlin {
+        kotlinOptions {
+            jvmTarget = "1.8"
+            freeCompilerArgs = ["-Xjsr305=strict", "-Xjvm-default=compatibility"]
+        }
+    }
+
+    compileTestKotlin {
+        kotlinOptions {
+            jvmTarget = "1.8"
+        }
+    }
+
+    sonarqube {
+        properties {
+            property "sonar.kotlin.detekt.reportPaths", "${projectDir.path}/build/reports/detekt/detekt.xml"
+        }
+    }
+
+    dependencies {
+        implementation lib("org.jetbrains.kotlin:kotlin-stdlib")
+        implementation lib("org.jetbrains.kotlin:kotlin-stdlib-jdk7")
+        implementation lib("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+        implementation lib("org.jetbrains.kotlin:kotlin-stdlib-common")
+        implementation lib("org.jetbrains.kotlin:kotlin-reflect")
+        permitUnusedDeclared("org.jetbrains.kotlin:kotlin-stdlib-jdk7")
+        permitUnusedDeclared("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
+        permitUnusedDeclared("org.jetbrains.kotlin:kotlin-stdlib-common")
+        permitUnusedDeclared("org.jetbrains.kotlin:kotlin-reflect")
+
+        testImplementation(lib("com.nhaarman:mockito-kotlin")) {
+            exclude group: 'org.jetbrains.kotlin'
+        }
+        permitTestUnusedDeclared(lib("com.nhaarman:mockito-kotlin")) {
+            exclude group: 'org.jetbrains.kotlin'
+        }
+    }
+}
+
+configure(javaProjects() + kotlinProjects() + groovyProjects()) {
+    apply plugin: "jacoco"
+    apply plugin: "maven-publish"
+    apply from: "${rootDir}/_gradle/compile.gradle"
+
+    group 'com.solvatech.onboarding'
+    version "${currentVersion}"
+
+    test {
+        useJUnitPlatform()
+        testLogging {
+            exceptionFormat = 'full'
+        }
+        reports.html.enabled = false
+        reports.junitXml.enabled = true
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    configurations {
+        compile.exclude group: "org.slf4j", module: "slf4j-jdk14"
+        compile.exclude group: "org.slf4j", module: "slf4j-log4j12"
+        all {
+            resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
+        }
+    }
 }
