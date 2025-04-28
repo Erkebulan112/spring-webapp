@@ -60,7 +60,7 @@
 
 1. Клонировать репозиторий:
    ```bash
-   git clone https://github.com/Erkebulan112/taskflow-microservice.git
+   git clone https://github.com/Erkebulan112/spring-webapp.git
    ```
 
 2. Перейдите в папку проекта:
