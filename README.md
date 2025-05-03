@@ -65,7 +65,7 @@
 
 2. Перейдите в папку проекта:
    ```bash
-   cd taskflow
+   cd spring-webapp
    ```
 3. Запустите все сервисы через Docker:
    ```bash
