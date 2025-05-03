@@ -3,7 +3,9 @@ package myrzakhan_taskflow.services.postgres.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import myrzakhan_taskflow.config.RabbitMQConfig;
+import myrzakhan_taskflow.dtos.event.NotificationStatus;
 import myrzakhan_taskflow.dtos.event.TaskHistoryEvent;
+import myrzakhan_taskflow.dtos.event.TaskNotificationEvent;
 import myrzakhan_taskflow.dtos.requests.TaskCreateRequest;
 import myrzakhan_taskflow.dtos.requests.TaskUpdateRequest;
 import myrzakhan_taskflow.entities.postgres.Task;
@@ -25,6 +27,8 @@ public class TaskServiceImpl implements TaskService {
 
     private final TaskRepository taskRepository;
     private final TaskHistoryEventProducer producer;
+    private static final String TASKFLOW_DIRECT_EXCHANGE = "taskflow.direct.exchange";
+    private static final String TASK_NOTIFICATION_DIRECT_RK = "notification.routing.key";
 
     @Override
     @Transactional(readOnly = true)
@@ -51,7 +55,7 @@ public class TaskServiceImpl implements TaskService {
         task.setDeadline(request.deadline());
 
         var savedTask = taskRepository.save(task);
-        sendTaskEvent(task, "CREATE", createTaskDetails(task));
+        sendTaskEvent(task, NotificationStatus.CREATE, createTaskDetails(task));
         return savedTask;
     }
 
@@ -66,25 +70,43 @@ public class TaskServiceImpl implements TaskService {
         task.setDeadline(request.deadline());
 
         var updatedTask = taskRepository.save(task);
-        sendTaskEvent(task, "UPDATE", updateTaskDetails(task, request));
+        sendTaskEvent(task, NotificationStatus.UPDATE, updateTaskDetails(task, request));
         return updatedTask;
     }
 
     @Override
     public void deleteTask(Long id) {
         log.info("Deleting task: {}", id);
+
+        var task = taskRepository.findById(id).orElseThrow(() ->
+                new NotFoundException("Task not found with id %d".formatted(id)));
+
+        sendTaskEvent(task, NotificationStatus.DELETE, Map.of(
+                "title", task.getTitle(),
+                "description", task.getDescription(),
+                "status", task.getStatus(),
+                "priority", task.getPriority(),
+                "deadline", task.getDeadline()
+        ));
         taskRepository.deleteById(id);
     }
 
-    private void sendTaskEvent(Task task, String action, Map<String, Object> details) {
+    private void sendTaskEvent(Task task, NotificationStatus action, Map<String, Object> details) {
         TaskHistoryEvent event = TaskHistoryEvent.builder()
                 .taskId(task.getId())
                 .action(action)
                 .details(details)
                 .build();
 
+        TaskNotificationEvent notificationEvent = TaskNotificationEvent.builder()
+                .taskId(task.getId())
+                .title(task.getTitle())
+                .status(action)
+                .build();
+
         log.info("Sending task event: {}", event);
         producer.sendTaskHistoryEvent(RabbitMQConfig.TASK_HISTORY_EXCHANGE, RabbitMQConfig.TASK_HISTORY_ROUTING_KEY, event);
+        producer.sendTaskHistoryToNotification(TASKFLOW_DIRECT_EXCHANGE, TASK_NOTIFICATION_DIRECT_RK, notificationEvent);
     }
 
     private Map<String, Object> createTaskDetails(Task task) {

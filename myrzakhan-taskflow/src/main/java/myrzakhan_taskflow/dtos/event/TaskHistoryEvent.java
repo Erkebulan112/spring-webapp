@@ -6,7 +6,7 @@ import java.util.Map;
 @Builder
 public record TaskHistoryEvent(
         Long taskId,
-        String action,
+        NotificationStatus action,
         Long performedBy,
         Map<String, Object> details
 ) {

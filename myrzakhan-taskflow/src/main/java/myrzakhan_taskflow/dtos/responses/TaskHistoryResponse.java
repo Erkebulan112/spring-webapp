@@ -1,5 +1,6 @@
 package myrzakhan_taskflow.dtos.responses;
 
+import myrzakhan_taskflow.dtos.event.NotificationStatus;
 import myrzakhan_taskflow.entities.mongo.TaskHistory;
 import org.bson.types.ObjectId;
 import java.time.LocalDateTime;
@@ -8,7 +9,7 @@ import java.util.Map;
 public record TaskHistoryResponse(
         ObjectId id,
         Long taskId,
-        String action,
+        NotificationStatus action,
         Long performedBy,
         LocalDateTime timestamp,
         Map<String, Object> details)

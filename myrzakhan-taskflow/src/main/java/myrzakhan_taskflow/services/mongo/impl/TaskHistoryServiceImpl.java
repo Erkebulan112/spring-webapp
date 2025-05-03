@@ -1,14 +1,14 @@
 package myrzakhan_taskflow.services.mongo.impl;
 
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import myrzakhan_taskflow.dtos.event.NotificationStatus;
 import myrzakhan_taskflow.entities.mongo.TaskHistory;
 import myrzakhan_taskflow.repositories.mongo.TaskHistoryRepository;
 import myrzakhan_taskflow.services.mongo.TaskHistoryService;
 import org.springframework.stereotype.Service;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
 
 @Service
 @Slf4j
@@ -24,7 +24,7 @@ public class TaskHistoryServiceImpl implements TaskHistoryService {
     }
 
     @Override
-    public TaskHistory save(Long taskId, String action, Long performedBy, Map<String, Object> details) {
+    public TaskHistory save(Long taskId, NotificationStatus action, Long performedBy, Map<String, Object> details) {
         TaskHistory taskHistory = new TaskHistory();
         taskHistory.setTaskId(taskId);
         taskHistory.setAction(action);

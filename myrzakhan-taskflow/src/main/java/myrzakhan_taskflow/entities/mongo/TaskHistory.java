@@ -1,13 +1,14 @@
 package myrzakhan_taskflow.entities.mongo;
 
-import lombok.Getter;
-import lombok.Setter;
-import org.bson.types.ObjectId;
-import org.hibernate.annotations.CreationTimestamp;
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
 import java.time.LocalDateTime;
 import java.util.Map;
+import lombok.Getter;
+import lombok.Setter;
+import myrzakhan_taskflow.dtos.event.NotificationStatus;
+import org.bson.types.ObjectId;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document
 @Getter
@@ -19,11 +20,11 @@ public class TaskHistory {
 
     private Long taskId;
 
-    private String action;
+    private NotificationStatus action;
 
     private Long performedBy;
 
-    @CreationTimestamp
+    @CreatedDate
     private LocalDateTime timestamp;
 
     private Map<String, Object> details;

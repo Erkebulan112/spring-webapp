@@ -93,6 +93,6 @@ public class DocumentFileServiceImpl implements DocumentFileService {
     public void deleteDocumentById(String id) {
         log.info("Delete document by id {}", id);
         ObjectId objectId = new ObjectId(id);
-        documentRepository.deleteById(String.valueOf(objectId));
+        documentRepository.deleteById(objectId);
     }
 }
