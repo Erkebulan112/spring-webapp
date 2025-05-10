@@ -1,4 +1,4 @@
-package myrzakhan_taskflow.entities.mongo;
+package event_consumer_service.entity;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -7,23 +7,20 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import java.time.LocalDateTime;
+import java.util.Map;
 
-@Document(collection = "document_files")
 @Getter
 @Setter
-public class DocumentFile {
+@Document(collection = "events")
+public class EventLog {
 
     @Id
     private ObjectId id;
-
-    private Long taskId;
-
-    private String filename;
-
-    private String fileType;
+    private String eventType;
+    private String entityId;
+    private String entityType;
+    private Map<String, Object> payload;
 
     @CreatedDate
-    private LocalDateTime uploadedAt;
-
-    private Long size;
+    private LocalDateTime createdAt;
 }

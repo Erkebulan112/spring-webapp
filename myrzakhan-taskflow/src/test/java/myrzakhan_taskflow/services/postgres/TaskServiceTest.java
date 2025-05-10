@@ -1,6 +1,23 @@
 package myrzakhan_taskflow.services.postgres;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Optional;
 import myrzakhan_taskflow.controllers.PageableConstants;
+import myrzakhan_taskflow.dtos.event.LogLevel;
 import myrzakhan_taskflow.dtos.event.TaskHistoryEvent;
 import myrzakhan_taskflow.dtos.requests.TaskCreateRequest;
 import myrzakhan_taskflow.dtos.requests.TaskUpdateRequest;
@@ -8,6 +25,7 @@ import myrzakhan_taskflow.entities.enums.Priority;
 import myrzakhan_taskflow.entities.enums.TaskStatus;
 import myrzakhan_taskflow.entities.postgres.Task;
 import myrzakhan_taskflow.exceptions.NotFoundException;
+import myrzakhan_taskflow.message.KafkaLogProducer;
 import myrzakhan_taskflow.message.TaskHistoryEventProducer;
 import myrzakhan_taskflow.repositories.postgres.TaskRepository;
 import myrzakhan_taskflow.services.postgres.impl.TaskServiceImpl;
@@ -22,12 +40,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.Optional;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class TaskServiceTest {
@@ -37,6 +49,9 @@ public class TaskServiceTest {
 
     @Mock
     private TaskHistoryEventProducer producer;
+
+    @Mock
+    private KafkaLogProducer kafkaLogProducer;
 
     @InjectMocks
     private TaskServiceImpl taskService;
@@ -135,20 +150,28 @@ public class TaskServiceTest {
 
         var response = taskService.createTask(taskCreateRequest);
 
-        assertAll("Testing method createTask",
-                () -> assertNotNull(response, "Created task must not be null"),
-                () -> assertEquals(task.getTitle(), response.getTitle(), "Title does not match"),
-                () -> assertEquals(task.getDescription(), response.getDescription(), "Description does not match"),
-                () -> verify(taskRepository, times(1)).save(any(Task.class)));
-
         var routingKeyCaptor = ArgumentCaptor.forClass(String.class);
         var eventCaptor = ArgumentCaptor.forClass(TaskHistoryEvent.class);
+        var contextCaptor = ArgumentCaptor.forClass(Map.class);
 
         verify(producer, times(1)).sendTaskHistoryEvent(
                 eq("task.history.exchange"),
                 routingKeyCaptor.capture(),
                 eventCaptor.capture()
         );
+
+        verify(kafkaLogProducer, times(1))
+                .sendLog(eq(LogLevel.INFO), eq("Task created"), contextCaptor.capture());
+
+        Map<String, Object> capturedContext = contextCaptor.getValue();
+
+        assertAll("Testing method createTask",
+                () -> assertNotNull(response, "Created task must not be null"),
+                () -> assertEquals(task.getTitle(), response.getTitle(), "Title does not match"),
+                () -> assertEquals(task.getDescription(), response.getDescription(), "Description does not match"),
+                () -> assertEquals(task.getTitle(), capturedContext.get("title")),
+                () -> assertEquals(task.getStatus(), capturedContext.get("status")),
+                () -> verify(taskRepository, times(1)).save(any(Task.class)));
     }
 
     @Test
@@ -175,9 +198,10 @@ public class TaskServiceTest {
 
     @Test
     void testDeleteTask() {
-        doNothing().when(taskRepository).deleteById(1L);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+        doNothing().when(taskRepository).delete(task);
         taskService.deleteTask(1L);
-        verify(taskRepository, times(1)).deleteById(1L);
+        verify(taskRepository, times(1)).delete(task);
     }
 
     @Test

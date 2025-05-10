@@ -1,5 +1,6 @@
 package myrzakhan_taskflow.repository;
 
+import myrzakhan_taskflow.dtos.event.NotificationStatus;
 import myrzakhan_taskflow.entities.mongo.TaskHistory;
 import myrzakhan_taskflow.repositories.mongo.TaskHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,12 +26,12 @@ public class TaskHistoryRepositoryTest {
 
         taskHistory1 = new TaskHistory();
         taskHistory1.setTaskId(taskId);
-        taskHistory1.setAction("action");
+        taskHistory1.setAction(NotificationStatus.CREATE);
         taskHistory1.setPerformedBy(1L);
 
         taskHistory2 = new TaskHistory();
         taskHistory2.setTaskId(taskId);
-        taskHistory2.setAction("move");
+        taskHistory2.setAction(NotificationStatus.UPDATE);
         taskHistory2.setPerformedBy(2L);
 
         taskHistoryRepository.saveAll(List.of(taskHistory1, taskHistory2));
@@ -42,7 +43,7 @@ public class TaskHistoryRepositoryTest {
         var result = taskHistoryRepository.findByTaskId(taskId);
 
         assertThat(result).hasSize(2);
-        assertThat(result).extracting("action").containsExactlyInAnyOrder("action", "move");
+        assertThat(result).extracting("action").containsExactlyInAnyOrder(NotificationStatus.CREATE, NotificationStatus.UPDATE);
     }
 
     @Test

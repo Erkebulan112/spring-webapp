@@ -3,6 +3,7 @@ package myrzakhan_taskflow.services.postgres.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import myrzakhan_taskflow.config.RabbitMQConfig;
+import myrzakhan_taskflow.dtos.event.LogLevel;
 import myrzakhan_taskflow.dtos.event.NotificationStatus;
 import myrzakhan_taskflow.dtos.event.TaskHistoryEvent;
 import myrzakhan_taskflow.dtos.event.TaskNotificationEvent;
@@ -10,6 +11,7 @@ import myrzakhan_taskflow.dtos.requests.TaskCreateRequest;
 import myrzakhan_taskflow.dtos.requests.TaskUpdateRequest;
 import myrzakhan_taskflow.entities.postgres.Task;
 import myrzakhan_taskflow.exceptions.NotFoundException;
+import myrzakhan_taskflow.message.KafkaLogProducer;
 import myrzakhan_taskflow.message.TaskHistoryEventProducer;
 import myrzakhan_taskflow.repositories.postgres.TaskRepository;
 import myrzakhan_taskflow.services.postgres.TaskService;
@@ -27,6 +29,7 @@ public class TaskServiceImpl implements TaskService {
 
     private final TaskRepository taskRepository;
     private final TaskHistoryEventProducer producer;
+    private final KafkaLogProducer kafkaLogProducer;
     private static final String TASKFLOW_DIRECT_EXCHANGE = "taskflow.direct.exchange";
     private static final String TASK_NOTIFICATION_DIRECT_RK = "notification.routing.key";
 
@@ -55,6 +58,9 @@ public class TaskServiceImpl implements TaskService {
         task.setDeadline(request.deadline());
 
         var savedTask = taskRepository.save(task);
+
+        kafkaLogProducer.sendLog(LogLevel.INFO, "Task created", buildContext(savedTask));
+        kafkaLogProducer.sendTaskLog(task, "Task created");
         sendTaskEvent(task, NotificationStatus.CREATE, createTaskDetails(task));
         return savedTask;
     }
@@ -70,6 +76,9 @@ public class TaskServiceImpl implements TaskService {
         task.setDeadline(request.deadline());
 
         var updatedTask = taskRepository.save(task);
+
+        kafkaLogProducer.sendLog(LogLevel.INFO, "Task updated", buildContext(updatedTask));
+        kafkaLogProducer.sendTaskLog(task, "Task updated");
         sendTaskEvent(task, NotificationStatus.UPDATE, updateTaskDetails(task, request));
         return updatedTask;
     }
@@ -81,14 +90,17 @@ public class TaskServiceImpl implements TaskService {
         var task = taskRepository.findById(id).orElseThrow(() ->
                 new NotFoundException("Task not found with id %d".formatted(id)));
 
-        sendTaskEvent(task, NotificationStatus.DELETE, Map.of(
-                "title", task.getTitle(),
-                "description", task.getDescription(),
-                "status", task.getStatus(),
-                "priority", task.getPriority(),
-                "deadline", task.getDeadline()
-        ));
-        taskRepository.deleteById(id);
+        Map<String, Object> context = new HashMap<>();
+        context.put("title", task.getTitle());
+        context.put("description", task.getDescription());
+        context.put("status", task.getStatus());
+        context.put("priority", task.getPriority());
+        context.put("deadline", task.getDeadline());
+
+        sendTaskEvent(task, NotificationStatus.DELETE, context);
+        kafkaLogProducer.sendLog(LogLevel.INFO, "Task deleted", buildContext(task));
+        kafkaLogProducer.sendTaskLog(task, "Task deleted");
+        taskRepository.delete(task);
     }
 
     private void sendTaskEvent(Task task, NotificationStatus action, Map<String, Object> details) {
@@ -139,5 +151,13 @@ public class TaskServiceImpl implements TaskService {
         }
 
         return changes;
+    }
+
+    private Map<String, Object> buildContext(Task task) {
+        Map<String, Object> context = new HashMap<>();
+        context.put("taskId", task.getId());
+        context.put("title", task.getTitle());
+        context.put("status", task.getStatus());
+        return context;
     }
 }

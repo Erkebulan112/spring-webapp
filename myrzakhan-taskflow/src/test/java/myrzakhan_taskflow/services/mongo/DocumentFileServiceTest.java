@@ -122,9 +122,9 @@ public class DocumentFileServiceTest {
 
     @Test
     void testDeleteDocument() {
-        var id = String.valueOf(ObjectId.get());
+        var id = ObjectId.get();
 
-        documentFileService.deleteDocumentById(id);
+        documentFileService.deleteDocumentById(String.valueOf(id));
 
         verify(documentFileRepository).deleteById(id);
         verifyNoMoreInteractions(documentFileRepository);

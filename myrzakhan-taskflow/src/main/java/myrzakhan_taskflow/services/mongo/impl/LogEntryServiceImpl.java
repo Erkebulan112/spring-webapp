@@ -1,13 +1,14 @@
 package myrzakhan_taskflow.services.mongo.impl;
 
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import myrzakhan_taskflow.dtos.event.LogLevel;
 import myrzakhan_taskflow.entities.mongo.LogEntry;
 import myrzakhan_taskflow.repositories.mongo.LogEntryRepository;
 import myrzakhan_taskflow.services.mongo.LogEntryService;
 import org.springframework.stereotype.Service;
-import java.time.LocalDateTime;
-import java.util.List;
 
 @Service
 @Slf4j
@@ -29,14 +30,12 @@ public class LogEntryServiceImpl implements LogEntryService {
     }
 
     @Override
-    public LogEntry createLogs(LogEntry logEntry) {
-        log.info("Create log {}", logEntry);
+    public LogEntry createLogs(LogLevel level, String message, Map<String, Object> context) {
+        log.info("Create log with level {}, message {}, context {}", level, message, context);
         LogEntry log = new LogEntry();
-        log.setId(logEntry.getId());
-        log.setLevel(logEntry.getLevel());
-        log.setMessage(logEntry.getMessage());
-        log.setTimestamp(LocalDateTime.now());
-        log.setContext(logEntry.getContext());
+        log.setLevel(level);
+        log.setMessage(message);
+        log.setContext(context);
         return logEntryRepository.save(log);
     }
 }

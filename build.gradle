@@ -10,8 +10,9 @@ plugins {
 
 }
 
-group 'com.solvatech.onboarding'
-version "${currentVersion}"
+group 'com.spring.webapp'
+def currentVersion = '1.0.0'
+version = currentVersion
 
 idea {
     project {
@@ -19,7 +20,7 @@ idea {
         languageLevel = '1.8'
     }
     module {
-        name = "solvatech-onboarding"
+        name = "spring-webapp"
     }
 }
 

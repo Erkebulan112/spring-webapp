@@ -1,0 +1,28 @@
+server:
+  port: 8082
+
+spring:
+  application.name:
+    event-consumer-service
+
+  data:
+    mongodb:
+      uri: mongodb://admin:pass@localhost:27018/mongodb?authSource=admin
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: event-consumer-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.value.default.type: event_consumer_service.dto.EventLogResponse
+        spring.json.trusted.packages: "*"
+    listener:
+      ack-mode: manual
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+
