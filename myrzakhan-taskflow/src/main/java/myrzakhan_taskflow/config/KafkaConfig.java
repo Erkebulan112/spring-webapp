@@ -30,6 +30,10 @@ public class KafkaConfig {
     public static final String TASKFLOW_EVENTS_TOPIC = "taskflow.events";
     public static final String TASKFLOW_DLQ_TOPIC = "taskflow.dlq";
 
+    public static final String INDEX_COMMENT_TOPIC = "index.comment";
+    public static final String INDEX_TASK_TOPIC = "index.task";
+    public static final String INDEX_PROJECT_TOPIC = "index.project";
+
     private final KafkaConfigProperties properties;
 
     @Bean
@@ -48,6 +52,21 @@ public class KafkaConfig {
     }
 
     @Bean
+    public NewTopic indexCommentTopic() {
+        return new NewTopic(INDEX_COMMENT_TOPIC, 1, (short) 1);
+    }
+
+    @Bean
+    public NewTopic indexTaskTopic() {
+        return new NewTopic(INDEX_TASK_TOPIC, 1, (short) 1);
+    }
+
+    @Bean
+    public NewTopic indexProjectTopic() {
+        return new NewTopic(INDEX_PROJECT_TOPIC, 1, (short) 1);
+    }
+
+    @Bean
     public KafkaAdmin kafkaAdmin() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, properties.getBootstrapServers());
@@ -60,6 +79,7 @@ public class KafkaConfig {
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, properties.getBootstrapServers());
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        configs.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, true);
         configs.put(ProducerConfig.RETRIES_CONFIG, 3);
         return new DefaultKafkaProducerFactory<>(configs);
     }
@@ -80,10 +100,8 @@ public class KafkaConfig {
 
         configs.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS,
                 JsonDeserializer.class.getName());
-        configs.put(JsonDeserializer.VALUE_DEFAULT_TYPE,
-                "myrzakhan_taskflow.dtos.responses.LogEntryResponse");
         configs.put(JsonDeserializer.TRUSTED_PACKAGES, "*");
-        configs.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
+        configs.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, true);
         return new DefaultKafkaConsumerFactory<>(configs);
     }
 

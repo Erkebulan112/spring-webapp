@@ -1,15 +1,25 @@
 package myrzakhan_taskflow.services.postgres.impl;
 
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import myrzakhan_taskflow.dtos.event.ProjectIndexDelete;
+import myrzakhan_taskflow.dtos.event.ProjectIndexEvent;
 import myrzakhan_taskflow.dtos.requests.ProjectCreateRequest;
 import myrzakhan_taskflow.dtos.requests.ProjectUpdateRequest;
+import myrzakhan_taskflow.entities.elastic.ProjectIndex;
 import myrzakhan_taskflow.entities.postgres.Project;
 import myrzakhan_taskflow.exceptions.NotFoundException;
+import myrzakhan_taskflow.message.KafkaLogProducer;
 import myrzakhan_taskflow.repositories.postgres.ProjectRepository;
 import myrzakhan_taskflow.services.postgres.ProjectService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.data.elasticsearch.core.SearchHit;
+import org.springframework.data.elasticsearch.core.SearchHits;
+import org.springframework.data.elasticsearch.core.query.Criteria;
+import org.springframework.data.elasticsearch.core.query.CriteriaQuery;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProjectServiceImpl implements ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final KafkaLogProducer kafkaLogProducer;
+    private final ElasticsearchOperations elasticsearchOperations;
 
     @Override
     @Transactional(readOnly = true)
@@ -41,7 +53,10 @@ public class ProjectServiceImpl implements ProjectService {
         project.setName(request.name());
         project.setDescription(request.description());
         project.setStatus(request.status());
-        return projectRepository.save(project);
+        projectRepository.save(project);
+
+        kafkaLogProducer.sendIndexEvent(ProjectIndexEvent.toDto(project));
+        return project;
     }
 
     @Override
@@ -51,12 +66,34 @@ public class ProjectServiceImpl implements ProjectService {
         project.setName(request.name());
         project.setDescription(request.description());
         project.setStatus(request.status());
-        return projectRepository.save(project);
+        projectRepository.save(project);
+
+        kafkaLogProducer.sendIndexEvent(ProjectIndexEvent.toDto(project));
+        return project;
     }
 
     @Override
     public void deleteProject(Long id) {
         log.info("Delete project: {}", id);
+        var project = projectRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Project not found with id: %d".formatted(id)));
+
+        kafkaLogProducer.sendIndexEvent(new ProjectIndexDelete(project.getId()));
         projectRepository.deleteById(id);
+    }
+
+    @Override
+    public List<ProjectIndex> searchProjects(String query) {
+        log.info("Search projects: {}", query);
+
+        Criteria criteria = new Criteria("name").matches(query)
+                .or(new Criteria("description").matches(query));
+
+        CriteriaQuery criteriaQuery = new CriteriaQuery(criteria);
+        SearchHits<ProjectIndex> searchHits = elasticsearchOperations.search(criteriaQuery, ProjectIndex.class);
+
+        return searchHits.stream()
+                .map(SearchHit::getContent)
+                .toList();
     }
 }

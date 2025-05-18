@@ -1,12 +1,14 @@
 package myrzakhan_taskflow.controllers.postgres;
 
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import myrzakhan_taskflow.controllers.PageableConstants;
 import myrzakhan_taskflow.dtos.requests.CommentCreateRequest;
 import myrzakhan_taskflow.dtos.requests.CommentUpdateRequest;
 import myrzakhan_taskflow.dtos.responses.CommentCreateResponse;
 import myrzakhan_taskflow.dtos.responses.CommentResponse;
+import myrzakhan_taskflow.dtos.responses.CommentSearchResponse;
 import myrzakhan_taskflow.dtos.responses.CommentUpdateResponse;
 import myrzakhan_taskflow.services.postgres.CommentService;
 import org.springframework.data.domain.Page;
@@ -18,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.net.URI;
 
 @RestController
-@RequestMapping("/api/comments")
+@RequestMapping("/api/tasks/{taskId}/comments")
 @RequiredArgsConstructor
 public class CommentController {
 
@@ -42,9 +44,23 @@ public class CommentController {
         return ResponseEntity.ok(CommentResponse.toDto(response));
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<List<CommentSearchResponse>> searchCommentsByTaskId(
+            @PathVariable Long taskId,
+            @RequestParam String query) {
+
+        var comments = commentService.searchComments(query, taskId);
+        var searchResults = comments.stream()
+                .map(CommentSearchResponse::toDto)
+                .toList();
+
+        return ResponseEntity.ok(searchResults);
+    }
+
+
     @PostMapping
-    public ResponseEntity<CommentCreateResponse> createComment(@Valid @RequestBody CommentCreateRequest request) {
-        var response = commentService.createComment(request);
+    public ResponseEntity<CommentCreateResponse> createComment(@PathVariable Long taskId, @Valid @RequestBody CommentCreateRequest request) {
+        var response = commentService.createComment(taskId, request);
         return ResponseEntity.created(URI.create("/comments/")).body(CommentCreateResponse.toDto(response));
     }
 
@@ -56,6 +72,7 @@ public class CommentController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteComment(@PathVariable Long id) {
+        commentService.deleteComment(id);
         return ResponseEntity.noContent().build();
     }
 }

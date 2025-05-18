@@ -1,13 +1,17 @@
 package myrzakhan_taskflow.controllers.postgres;
 
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import myrzakhan_taskflow.controllers.PageableConstants;
 import myrzakhan_taskflow.dtos.requests.TaskCreateRequest;
 import myrzakhan_taskflow.dtos.requests.TaskUpdateRequest;
 import myrzakhan_taskflow.dtos.responses.TaskCreateResponse;
 import myrzakhan_taskflow.dtos.responses.TaskResponse;
+import myrzakhan_taskflow.dtos.responses.TaskSearchResponse;
 import myrzakhan_taskflow.dtos.responses.TaskUpdateResponse;
+import myrzakhan_taskflow.entities.enums.Priority;
+import myrzakhan_taskflow.entities.enums.TaskStatus;
 import myrzakhan_taskflow.services.postgres.TaskService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +45,21 @@ public class TaskController {
     public ResponseEntity<TaskResponse> getTaskById(@PathVariable Long id) {
         var response = taskService.findTaskById(id);
         return ResponseEntity.ok(TaskResponse.toDto(response));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<List<TaskSearchResponse>> searchTasks(
+            @RequestParam String query,
+            @RequestParam(required = false) TaskStatus status,
+            @RequestParam(required = false) Priority priority) {
+
+        var tasks = taskService.searchTasks(query, status, priority);
+
+        var result = tasks.stream()
+                .map(TaskSearchResponse::toDto)
+                .toList();
+
+        return ResponseEntity.ok(result);
     }
 
     @PostMapping

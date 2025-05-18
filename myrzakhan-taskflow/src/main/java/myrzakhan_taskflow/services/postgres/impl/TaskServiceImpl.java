@@ -1,14 +1,20 @@
 package myrzakhan_taskflow.services.postgres.impl;
 
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import myrzakhan_taskflow.config.RabbitMQConfig;
 import myrzakhan_taskflow.dtos.event.LogLevel;
 import myrzakhan_taskflow.dtos.event.NotificationStatus;
 import myrzakhan_taskflow.dtos.event.TaskHistoryEvent;
+import myrzakhan_taskflow.dtos.event.TaskIndexDelete;
+import myrzakhan_taskflow.dtos.event.TaskIndexEvent;
 import myrzakhan_taskflow.dtos.event.TaskNotificationEvent;
 import myrzakhan_taskflow.dtos.requests.TaskCreateRequest;
 import myrzakhan_taskflow.dtos.requests.TaskUpdateRequest;
+import myrzakhan_taskflow.entities.elastic.TaskIndex;
+import myrzakhan_taskflow.entities.enums.Priority;
+import myrzakhan_taskflow.entities.enums.TaskStatus;
 import myrzakhan_taskflow.entities.postgres.Task;
 import myrzakhan_taskflow.exceptions.NotFoundException;
 import myrzakhan_taskflow.message.KafkaLogProducer;
@@ -17,6 +23,11 @@ import myrzakhan_taskflow.repositories.postgres.TaskRepository;
 import myrzakhan_taskflow.services.postgres.TaskService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.data.elasticsearch.core.SearchHit;
+import org.springframework.data.elasticsearch.core.SearchHits;
+import org.springframework.data.elasticsearch.core.query.Criteria;
+import org.springframework.data.elasticsearch.core.query.CriteriaQuery;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.HashMap;
@@ -30,6 +41,7 @@ public class TaskServiceImpl implements TaskService {
     private final TaskRepository taskRepository;
     private final TaskHistoryEventProducer producer;
     private final KafkaLogProducer kafkaLogProducer;
+    private final ElasticsearchOperations elasticsearchOperations;
     private static final String TASKFLOW_DIRECT_EXCHANGE = "taskflow.direct.exchange";
     private static final String TASK_NOTIFICATION_DIRECT_RK = "notification.routing.key";
 
@@ -61,6 +73,7 @@ public class TaskServiceImpl implements TaskService {
 
         kafkaLogProducer.sendLog(LogLevel.INFO, "Task created", buildContext(savedTask));
         kafkaLogProducer.sendTaskLog(task, "Task created");
+        kafkaLogProducer.sendIndexEvent(TaskIndexEvent.toDto(task));
         sendTaskEvent(task, NotificationStatus.CREATE, createTaskDetails(task));
         return savedTask;
     }
@@ -79,6 +92,7 @@ public class TaskServiceImpl implements TaskService {
 
         kafkaLogProducer.sendLog(LogLevel.INFO, "Task updated", buildContext(updatedTask));
         kafkaLogProducer.sendTaskLog(task, "Task updated");
+        kafkaLogProducer.sendIndexEvent(TaskIndexEvent.toDto(task));
         sendTaskEvent(task, NotificationStatus.UPDATE, updateTaskDetails(task, request));
         return updatedTask;
     }
@@ -100,8 +114,35 @@ public class TaskServiceImpl implements TaskService {
         sendTaskEvent(task, NotificationStatus.DELETE, context);
         kafkaLogProducer.sendLog(LogLevel.INFO, "Task deleted", buildContext(task));
         kafkaLogProducer.sendTaskLog(task, "Task deleted");
+        kafkaLogProducer.sendIndexEvent(new TaskIndexDelete(task.getId()));
         taskRepository.delete(task);
     }
+
+    @Override
+    public List<TaskIndex> searchTasks(String query, TaskStatus status, Priority priority) {
+
+        Criteria titleCriteria = new Criteria("title").matches(query);
+        Criteria descriptionCriteria = new Criteria("description").matches(query);
+
+        Criteria contentCriteria = new Criteria().or(titleCriteria).or(descriptionCriteria);
+
+        if (status != null) {
+            contentCriteria  = contentCriteria.and(new Criteria("status").is(status));
+        }
+
+        if (priority != null) {
+            contentCriteria = contentCriteria.and(new Criteria("priority").is(priority));
+        }
+
+        CriteriaQuery searchQuery = new CriteriaQuery(contentCriteria);
+
+        SearchHits<TaskIndex> searchHits = elasticsearchOperations.search(searchQuery, TaskIndex.class);
+
+        return searchHits.stream()
+                .map(SearchHit::getContent)
+                .toList();
+    }
+
 
     private void sendTaskEvent(Task task, NotificationStatus action, Map<String, Object> details) {
         TaskHistoryEvent event = TaskHistoryEvent.builder()

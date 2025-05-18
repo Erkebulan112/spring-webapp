@@ -1,7 +1,9 @@
 package myrzakhan_taskflow.services.postgres;
 
+import java.util.List;
 import myrzakhan_taskflow.dtos.requests.ProjectCreateRequest;
 import myrzakhan_taskflow.dtos.requests.ProjectUpdateRequest;
+import myrzakhan_taskflow.entities.elastic.ProjectIndex;
 import myrzakhan_taskflow.entities.postgres.Project;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,4 +19,6 @@ public interface ProjectService {
     Project updateProject(Long id, ProjectUpdateRequest project);
 
     void deleteProject(Long id);
+
+    List<ProjectIndex> searchProjects(String query);
 }

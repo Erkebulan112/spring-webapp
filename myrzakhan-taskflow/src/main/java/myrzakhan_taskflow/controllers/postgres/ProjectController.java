@@ -1,12 +1,14 @@
 package myrzakhan_taskflow.controllers.postgres;
 
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import myrzakhan_taskflow.controllers.PageableConstants;
 import myrzakhan_taskflow.dtos.requests.ProjectCreateRequest;
 import myrzakhan_taskflow.dtos.requests.ProjectUpdateRequest;
 import myrzakhan_taskflow.dtos.responses.ProjectCreateResponse;
 import myrzakhan_taskflow.dtos.responses.ProjectResponse;
+import myrzakhan_taskflow.dtos.responses.ProjectSearchResponse;
 import myrzakhan_taskflow.dtos.responses.ProjectUpdateResponse;
 import myrzakhan_taskflow.services.postgres.ProjectService;
 import org.springframework.data.domain.Page;
@@ -43,6 +45,18 @@ public class ProjectController {
         return ResponseEntity.ok(ProjectResponse.toDto(response));
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<List<ProjectSearchResponse>> searchProjects(
+            @RequestParam String query) {
+        var projects = projectService.searchProjects(query);
+
+        var searchResults = projects.stream()
+                .map(ProjectSearchResponse::toDto)
+                .toList();
+
+        return ResponseEntity.ok(searchResults);
+    }
+
     @PostMapping
     public ResponseEntity<ProjectCreateResponse> createProject(@Valid @RequestBody ProjectCreateRequest request) {
         var response = projectService.createProject(request);
@@ -57,6 +71,7 @@ public class ProjectController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteProject(@PathVariable Long id) {
+        projectService.deleteProject(id);
         return ResponseEntity.noContent().build();
     }
 }
