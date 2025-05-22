@@ -26,6 +26,19 @@ spring:
     mongodb:
       uri: mongodb://admin:pass@localhost:27017/mongodb?authSource=admin
 
+    redis:
+      url: redis://localhost:6379
+      database: 0
+      connect-timeout: 60000
+
+  cache:
+    type: redis
+    redis:
+      time-to-live:
+        tasks: 1800000
+        projects: 3600000
+        users: 86400000
+
   rabbitmq:
     port: 5672
     username: guest

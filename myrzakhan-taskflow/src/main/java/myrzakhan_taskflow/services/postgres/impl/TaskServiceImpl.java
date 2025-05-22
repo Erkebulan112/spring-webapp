@@ -3,7 +3,9 @@ package myrzakhan_taskflow.services.postgres.impl;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import myrzakhan_taskflow.cache.pub.RedisEventPublisher;
 import myrzakhan_taskflow.config.RabbitMQConfig;
+import myrzakhan_taskflow.dtos.event.CacheEvent;
 import myrzakhan_taskflow.dtos.event.LogLevel;
 import myrzakhan_taskflow.dtos.event.NotificationStatus;
 import myrzakhan_taskflow.dtos.event.TaskHistoryEvent;
@@ -21,6 +23,9 @@ import myrzakhan_taskflow.message.KafkaLogProducer;
 import myrzakhan_taskflow.message.TaskHistoryEventProducer;
 import myrzakhan_taskflow.repositories.postgres.TaskRepository;
 import myrzakhan_taskflow.services.postgres.TaskService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
@@ -41,6 +46,7 @@ public class TaskServiceImpl implements TaskService {
     private final TaskRepository taskRepository;
     private final TaskHistoryEventProducer producer;
     private final KafkaLogProducer kafkaLogProducer;
+    private final RedisEventPublisher redisEventPublisher;
     private final ElasticsearchOperations elasticsearchOperations;
     private static final String TASKFLOW_DIRECT_EXCHANGE = "taskflow.direct.exchange";
     private static final String TASK_NOTIFICATION_DIRECT_RK = "notification.routing.key";
@@ -53,6 +59,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
+    @Cacheable(value = "tasks", key = "#id", unless = "#result == null")
     @Transactional(readOnly = true)
     public Task findTaskById(Long id) {
         log.info("Get task by id: {}", id);
@@ -60,6 +67,7 @@ public class TaskServiceImpl implements TaskService {
     }
 
     @Override
+    @CachePut(value = "tasks", key = "#result.id")
     public Task createTask(TaskCreateRequest request) {
         log.info("Creating task: {}", request);
         Task task = new Task();
@@ -75,10 +83,12 @@ public class TaskServiceImpl implements TaskService {
         kafkaLogProducer.sendTaskLog(task, "Task created");
         kafkaLogProducer.sendIndexEvent(TaskIndexEvent.toDto(task));
         sendTaskEvent(task, NotificationStatus.CREATE, createTaskDetails(task));
+        redisEventPublisher.publishCacheEvent(CacheEvent.createEvent("tasks", task.getId(), task));
         return savedTask;
     }
 
     @Override
+    @CachePut(value = "tasks", key = "#id")
     public Task updateTask(Long id, TaskUpdateRequest request) {
         log.info("Updating task: {}", request);
         var task = taskRepository.findById(id).orElseThrow(() -> new NotFoundException("Task not found with id %d".formatted(id)));
@@ -94,10 +104,12 @@ public class TaskServiceImpl implements TaskService {
         kafkaLogProducer.sendTaskLog(task, "Task updated");
         kafkaLogProducer.sendIndexEvent(TaskIndexEvent.toDto(task));
         sendTaskEvent(task, NotificationStatus.UPDATE, updateTaskDetails(task, request));
+        redisEventPublisher.publishCacheEvent(CacheEvent.updateEvent("tasks", task.getId(), task));
         return updatedTask;
     }
 
     @Override
+    @CacheEvict(value = "tasks", key = "#id")
     public void deleteTask(Long id) {
         log.info("Deleting task: {}", id);
 
@@ -110,12 +122,13 @@ public class TaskServiceImpl implements TaskService {
         context.put("status", task.getStatus());
         context.put("priority", task.getPriority());
         context.put("deadline", task.getDeadline());
+        taskRepository.delete(task);
 
         sendTaskEvent(task, NotificationStatus.DELETE, context);
         kafkaLogProducer.sendLog(LogLevel.INFO, "Task deleted", buildContext(task));
         kafkaLogProducer.sendTaskLog(task, "Task deleted");
         kafkaLogProducer.sendIndexEvent(new TaskIndexDelete(task.getId()));
-        taskRepository.delete(task);
+        redisEventPublisher.publishCacheEvent(CacheEvent.evictEvent("tasks", task.getId()));
     }
 
     @Override
